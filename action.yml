@@ -1,0 +1,80 @@
+name: GitHub Diff Reporter
+description: Analyze pushed commits with Groq and create privacy-first Notion reports
+author: github-diff-reporter
+
+branding:
+  icon: book-open
+  color: gray-dark
+
+inputs:
+  groq-api-key:
+    description: Groq API key stored as a GitHub Actions secret
+    required: false
+    default: ""
+  notion-token:
+    description: Notion internal integration token
+    required: true
+  notion-data-source-id:
+    description: Target Notion data source ID
+    required: true
+  ai-enabled:
+    description: Use Groq after local sensitive-data checks
+    required: false
+    default: "true"
+  groq-model:
+    description: Groq model ID
+    required: false
+    default: openai/gpt-oss-120b
+  max-diff-characters:
+    description: Maximum sanitized Diff characters sent to Groq for one commit
+    required: false
+    default: "14000"
+  title-property:
+    description: Notion title property name
+    required: false
+    default: 이름
+  date-property:
+    description: Notion date property name
+    required: false
+    default: 날짜
+  category-property:
+    description: Notion multi-select project category property name
+    required: false
+    default: 카테고리
+  include-file-paths:
+    description: Include non-sensitive file paths in the Notion report
+    required: false
+    default: "true"
+  exclude-paths:
+    description: Additional comma or newline separated glob patterns excluded from the report
+    required: false
+    default: ""
+  max-files-per-section:
+    description: Maximum file paths listed in one report
+    required: false
+    default: "30"
+  skip-merge-commits:
+    description: Skip commits with more than one parent
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Generate Notion commit reports
+      shell: bash
+      env:
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        NOTION_TOKEN: ${{ inputs.notion-token }}
+        NOTION_DATA_SOURCE_ID: ${{ inputs.notion-data-source-id }}
+        AI_ENABLED: ${{ inputs.ai-enabled }}
+        GROQ_MODEL: ${{ inputs.groq-model }}
+        MAX_DIFF_CHARACTERS: ${{ inputs.max-diff-characters }}
+        NOTION_TITLE_PROPERTY: ${{ inputs.title-property }}
+        NOTION_DATE_PROPERTY: ${{ inputs.date-property }}
+        NOTION_CATEGORY_PROPERTY: ${{ inputs.category-property }}
+        INCLUDE_FILE_PATHS: ${{ inputs.include-file-paths }}
+        EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+        MAX_FILES_PER_SECTION: ${{ inputs.max-files-per-section }}
+        SKIP_MERGE_COMMITS: ${{ inputs.skip-merge-commits }}
+      run: node "$GITHUB_ACTION_PATH/src/report.mjs"

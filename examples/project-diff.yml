@@ -1,0 +1,33 @@
+name: Document pushed commits
+
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  create-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Create Notion documents
+        uses: YOUR_GITHUB_ID/github-diff-reporter@v1
+        with:
+          groq-api-key: ${{ secrets.GROQ_API_KEY }}
+          notion-token: ${{ secrets.NOTION_TOKEN }}
+          notion-data-source-id: 3a17bcc1-71bc-805f-b1ae-000bb54445d3
+          ai-enabled: "true"
+          # 선택 사항: Notion에도 파일명을 보내고 싶지 않다면 false
+          include-file-paths: "true"
+          # 선택 사항: 회사/개인 프로젝트에 맞는 추가 제외 경로
+          exclude-paths: |
+            private/**
+            internal/customer-data/**
