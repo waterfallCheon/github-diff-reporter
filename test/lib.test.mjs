@@ -9,6 +9,7 @@ import {
   parseModelJson,
   prepareAiDiff,
   redactSecrets,
+  reportToBlocks,
   secretFindings,
   splitPatterns,
   ZERO_SHA,
@@ -123,4 +124,43 @@ test("can omit every file path from the report", () => {
     deletions: 1,
   }, { includeFilePaths: false, maxFiles: 30 });
   assert.deepEqual(report.fileGuide, []);
+});
+
+test("builds a polished explain-diff Notion layout", () => {
+  const blocks = reportToBlocks({
+    summary: "로그인 흐름을 개선했습니다.",
+    generationNotice: "민감 정보 검사 통과",
+    purpose: ["로그인 실패 원인을 쉽게 파악"],
+    before: ["오류 원인이 표시되지 않음"],
+    after: ["사용자에게 오류 원인을 안내"],
+    keyChanges: ["오류 처리 분기 추가"],
+    executionFlow: ["로그인 요청", "응답 검사", "오류 표시"],
+    fileGuide: ["src/login.mjs · 로그인 처리"],
+    technicalDecisions: ["기존 오류 타입 재사용"],
+    alternatives: ["새 오류 타입 추가"],
+    risks: ["서버 메시지 노출 여부 확인"],
+    testGuide: ["잘못된 비밀번호로 로그인"],
+    cognitiveDebt: ["다른 인증 오류는 추가 확인 필요"],
+    comprehensionQuestions: ["오류는 언제 표시되나요?"],
+    comprehensionAnswers: ["로그인 응답이 실패일 때 표시됩니다."],
+    nextSteps: ["통합 테스트 추가"],
+  }, {
+    message: "feat: 로그인 개선",
+    repository: "owner/project",
+    branch: "main",
+    sha: "a".repeat(40),
+    author: "Developer",
+    fileDetails: [{ path: "src/login.mjs" }],
+    excludedFileCount: 0,
+    additions: 10,
+    deletions: 2,
+    commitUrl: "https://github.com/owner/project/commit/abc",
+  });
+
+  assert.deepEqual(blocks.slice(0, 3).map((block) => block.type), ["callout", "callout", "callout"]);
+  assert.ok(blocks.some((block) => block.type === "to_do"));
+  assert.ok(blocks.some((block) => block.type === "toggle"
+    && block.toggle.rich_text[0].text.content.startsWith("Q1.")));
+  assert.equal(blocks.at(-1).type, "toggle");
+  assert.equal(blocks.at(-1).toggle.rich_text[0].text.content, "커밋 정보");
 });

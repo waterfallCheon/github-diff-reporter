@@ -279,9 +279,9 @@ function paragraph(text) {
   return { object: "block", type: "paragraph", paragraph: { rich_text: richText(text) } };
 }
 
-function heading(text, level = 2) {
+function heading(text, level = 2, color = "default") {
   const type = `heading_${level}`;
-  return { object: "block", type, [type]: { rich_text: richText(text) } };
+  return { object: "block", type, [type]: { rich_text: richText(text), color } };
 }
 
 function bullets(items) {
@@ -292,50 +292,106 @@ function bullets(items) {
   }));
 }
 
+function numbered(items) {
+  return (items ?? []).filter(Boolean).slice(0, 20).map((item) => ({
+    object: "block",
+    type: "numbered_list_item",
+    numbered_list_item: { rich_text: richText(typeof item === "string" ? item : JSON.stringify(item)) },
+  }));
+}
+
+function todos(items) {
+  return (items ?? []).filter(Boolean).slice(0, 20).map((item) => ({
+    object: "block",
+    type: "to_do",
+    to_do: {
+      rich_text: richText(typeof item === "string" ? item : JSON.stringify(item)),
+      checked: false,
+    },
+  }));
+}
+
+function toggle(title, children) {
+  return {
+    object: "block",
+    type: "toggle",
+    toggle: { rich_text: richText(title), children: children.filter(Boolean) },
+  };
+}
+
+function callout(icon, text, color = "default") {
+  return {
+    object: "block",
+    type: "callout",
+    callout: { icon: { type: "emoji", emoji: icon }, rich_text: richText(text), color },
+  };
+}
+
 export function reportToBlocks(report, meta) {
+  const firstResult = report.after?.[0] || report.purpose?.[0] || meta.message;
   const blocks = [
-    { object: "block", type: "callout", callout: { icon: { type: "emoji", emoji: "📝" }, rich_text: richText(report.summary || meta.message) } },
-    { object: "block", type: "callout", callout: { icon: { type: "emoji", emoji: "🔒" }, rich_text: richText(report.generationNotice) } },
+    callout("🧭", `한 줄 요약 — ${report.summary || meta.message}`, "blue_background"),
+    callout("✅", `이번 커밋의 결과 — ${firstResult}`, "green_background"),
+    callout("🔒", `개인정보·보안 — ${report.generationNotice}`, "gray_background"),
   ];
 
-  const sections = [
-    ["변경 목적", report.purpose],
-    ["변경 전 동작", report.before],
-    ["변경 후 동작", report.after],
-    ["주요 변경 영역", report.keyChanges],
-    ["실행 흐름", report.executionFlow],
-    ["파일별 변경", report.fileGuide],
-    ["기술적 선택과 이유", report.technicalDecisions],
-    ["고려할 수 있는 대안", report.alternatives],
-    ["검토 포인트", report.risks],
-    ["확인 방법", report.testGuide],
-    ["보고서의 한계", report.cognitiveDebt],
-    ["다음 작업", report.nextSteps],
-  ];
+  if (report.purpose?.length) {
+    blocks.push(heading("왜 바꿨나요?", 2, "blue"), ...bullets(report.purpose));
+  }
 
-  for (const [title, value] of sections) {
-    const items = Array.isArray(value) ? value : value ? [value] : [];
-    if (!items.length) continue;
-    blocks.push(heading(title), ...bullets(items));
+  if (report.before?.length || report.after?.length) {
+    blocks.push(heading("변경 전과 변경 후", 2, "blue"));
+    if (report.before?.length) blocks.push(heading("변경 전", 3), ...bullets(report.before));
+    if (report.after?.length) blocks.push(heading("변경 후", 3), ...bullets(report.after));
+  }
+
+  if (report.executionFlow?.length) {
+    blocks.push(heading("자동화·실행 흐름", 2, "blue"), ...numbered(report.executionFlow));
+  }
+
+  if (report.keyChanges?.length || report.fileGuide?.length) {
+    blocks.push(heading("이번 커밋에서 바뀐 내용", 2, "blue"));
+    if (report.keyChanges?.length) blocks.push(...bullets(report.keyChanges));
+    if (report.fileGuide?.length) {
+      blocks.push(heading("파일별 안내", 3), ...bullets(report.fileGuide));
+    }
+  }
+
+  if (report.technicalDecisions?.length || report.alternatives?.length) {
+    blocks.push(heading("설계 판단", 2, "blue"));
+    if (report.technicalDecisions?.length) blocks.push(...bullets(report.technicalDecisions));
+    if (report.alternatives?.length) {
+      blocks.push(toggle("고려할 수 있는 다른 방법", bullets(report.alternatives)));
+    }
+  }
+
+  if (report.risks?.length) {
+    blocks.push(heading("안전장치와 검토 포인트", 2, "orange"), ...bullets(report.risks));
+  }
+
+  if (report.testGuide?.length) {
+    blocks.push(heading("직접 확인해 보기", 2, "green"), ...todos(report.testGuide));
+  }
+
+  if (report.cognitiveDebt?.length) {
+    blocks.push(heading("남아 있는 인지 부채", 2, "yellow"), ...bullets(report.cognitiveDebt));
   }
 
   const questions = report.comprehensionQuestions ?? [];
   const answers = report.comprehensionAnswers ?? [];
   if (questions.length) {
-    blocks.push(heading("이해도 확인 질문"));
+    blocks.push(heading("이해도 확인", 2, "purple"));
     questions.slice(0, 8).forEach((question, index) => {
-      blocks.push({
-        object: "block",
-        type: "numbered_list_item",
-        numbered_list_item: { rich_text: richText(question) },
-      });
-      if (answers[index]) blocks.push(paragraph(`답: ${answers[index]}`));
+      const answer = answers[index] ? [paragraph(answers[index])] : [];
+      blocks.push(toggle(`Q${index + 1}. ${question}`, answer));
     });
   }
 
-  blocks.push(
-    heading("변경 정보"),
-    ...bullets([
+  if (report.nextSteps?.length) {
+    blocks.push(heading("다음 단계", 2, "blue"), ...numbered(report.nextSteps));
+  }
+
+  blocks.push(toggle("커밋 정보", bullets([
       `프로젝트: ${meta.repository}`,
       `브랜치: ${meta.branch}`,
       `Commit: ${meta.sha}`,
@@ -344,8 +400,7 @@ export function reportToBlocks(report, meta) {
       `민감 경로 제외 파일: ${meta.excludedFileCount}개`,
       `추가 ${meta.additions}줄 / 삭제 ${meta.deletions}줄`,
       `원본 커밋: ${meta.commitUrl}`,
-    ]),
-  );
+    ])));
 
   return blocks.slice(0, 100);
 }
